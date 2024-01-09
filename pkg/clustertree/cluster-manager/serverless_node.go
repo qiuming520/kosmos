@@ -56,8 +56,13 @@ func CreateOpenApiNode(ctx context.Context, cluster *kosmosv1alpha1.Cluster, roo
 	if cluster.Spec.ClusterTreeOptions == nil {
 		return fmt.Errorf("clusterTreeOptions is nil")
 	}
-	ak := cluster.Spec.ClusterTreeOptions.AccessKey
-	sk := cluster.Spec.ClusterTreeOptions.SecretKey
+	args, ok := cluster.Spec.ClusterTreeOptions.LeafConfig.Args.(*kosmosv1alpha1.ECloudServerlessArgs)
+	if !ok {
+		return fmt.Errorf("want node provider (%v) args to be of type, got %T", cluster.Spec.ClusterTreeOptions.LeafConfig.Name, args)
+	}
+
+	ak := args.AccessKey
+	sk := args.SecretKey
 
 	if len(ak) == 0 || len(sk) == 0 {
 		return fmt.Errorf("ak/sk is nil")

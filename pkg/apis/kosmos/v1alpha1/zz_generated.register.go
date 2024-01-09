@@ -48,6 +48,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ClusterNodeList{},
 		&DaemonSet{},
 		&DaemonSetList{},
+		&ECloudServerlessArgs{},
 		&Knode{},
 		&KnodeList{},
 		&NodeConfig{},

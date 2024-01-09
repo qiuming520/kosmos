@@ -35,12 +35,14 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.DaemonSetSpec":                      schema_pkg_apis_kosmos_v1alpha1_DaemonSetSpec(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.DaemonSetStatus":                    schema_pkg_apis_kosmos_v1alpha1_DaemonSetStatus(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.Device":                             schema_pkg_apis_kosmos_v1alpha1_Device(ref),
+		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.ECloudServerlessArgs":               schema_pkg_apis_kosmos_v1alpha1_ECloudServerlessArgs(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.Fdb":                                schema_pkg_apis_kosmos_v1alpha1_Fdb(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.Iptables":                           schema_pkg_apis_kosmos_v1alpha1_Iptables(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.Knode":                              schema_pkg_apis_kosmos_v1alpha1_Knode(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.KnodeList":                          schema_pkg_apis_kosmos_v1alpha1_KnodeList(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.KnodeSpec":                          schema_pkg_apis_kosmos_v1alpha1_KnodeSpec(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.KnodeStatus":                        schema_pkg_apis_kosmos_v1alpha1_KnodeStatus(ref),
+		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.LeafConfig":                         schema_pkg_apis_kosmos_v1alpha1_LeafConfig(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.LeafModel":                          schema_pkg_apis_kosmos_v1alpha1_LeafModel(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.LeafNodeItem":                       schema_pkg_apis_kosmos_v1alpha1_LeafNodeItem(ref),
 		"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.NICNodeNames":                       schema_pkg_apis_kosmos_v1alpha1_NICNodeNames(ref),
@@ -696,24 +698,18 @@ func schema_pkg_apis_kosmos_v1alpha1_ClusterTreeOptions(ref common.ReferenceCall
 							Format: "",
 						},
 					},
-					"accressKey": {
+					"leafConfig": {
 						SchemaProps: spec.SchemaProps{
-							Description: "secret?",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"secretKey": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "LeafConfig is an optional set of arguments for node provider.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.LeafConfig"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.LeafModel"},
+			"github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.LeafConfig", "github.com/kosmos.io/kosmos/pkg/apis/kosmos/v1alpha1.LeafModel"},
 	}
 }
 
@@ -1101,6 +1097,45 @@ func schema_pkg_apis_kosmos_v1alpha1_Device(ref common.ReferenceCallback) common
 	}
 }
 
+func schema_pkg_apis_kosmos_v1alpha1_ECloudServerlessArgs(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ECloudServerlessArgs holds arguments used to configure the ECloudServerless node provider",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"accessKey": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"secretKey": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_kosmos_v1alpha1_Fdb(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -1341,6 +1376,33 @@ func schema_pkg_apis_kosmos_v1alpha1_KnodeStatus(ref common.ReferenceCallback) c
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_pkg_apis_kosmos_v1alpha1_LeafConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name defines the name of node provider being configured",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"args": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Args defines the arguments passed to the plugins at the time of initialization. Args can have arbitrary structure.",
+							Ref:         ref("k8s.io/apimachinery/pkg/runtime.Object"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/runtime.Object"},
 	}
 }
 

@@ -124,115 +124,123 @@ func (c *ClusterController) Reconcile(ctx context.Context, request reconcile.Req
 		return controllerruntime.Result{RequeueAfter: RequeueTime}, err
 	}
 
-	if cluster.Spec.ClusterTreeOptions.LeafType == string(leafUtils.LeafTypeServerless) {
-		if !cluster.DeletionTimestamp.IsZero() {
-			// TODO:
+	switch cluster.Spec.ClusterTreeOptions.LeafType {
+	case string(leafUtils.LeafTypeServerless):
+		{
+			if !cluster.DeletionTimestamp.IsZero() {
+				// TODO:
+				return reconcile.Result{}, nil
+			}
+			// TODO: ....
+			if err := CreateOpenApiNode(ctx, cluster, c.RootClientset, c.Options); err != nil {
+				return controllerruntime.Result{RequeueAfter: RequeueTime}, err
+			}
+			// TODO: clean
 			return reconcile.Result{}, nil
 		}
-		// TODO: ....
-		if err := CreateOpenApiNode(ctx, cluster, c.RootClientset, c.Options); err != nil {
-			return controllerruntime.Result{RequeueAfter: RequeueTime}, err
-		}
-		// TODO: clean
-		return reconcile.Result{}, nil
-	}
-
-	config, err := utils.NewConfigFromBytes(cluster.Spec.Kubeconfig, func(config *rest.Config) {
-		config.QPS = utils.DefaultLeafKubeQPS
-		config.Burst = utils.DefaultLeafKubeBurst
-	})
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("could not build kubeconfig for cluster %s: %v", cluster.Name, err)
-	}
-
-	leafClient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("could not build clientset for cluster %s: %v", cluster.Name, err)
-	}
-
-	leafDynamic, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("could not build dynamic client for cluster %s: %v", cluster.Name, err)
-	}
-
-	leafKosmosClient, err := kosmosversioned.NewForConfig(config)
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("could not build kosmos clientset for cluster %s: %v", cluster.Name, err)
-	}
-
-	// ensure finalizer
-	if cluster.DeletionTimestamp.IsZero() {
-		if !controllerutil.ContainsFinalizer(cluster, ControllerFinalizerName) {
-			controllerutil.AddFinalizer(cluster, ControllerFinalizerName)
-			if err := c.Root.Update(ctx, cluster); err != nil {
-				return controllerruntime.Result{}, err
+	case string(leafUtils.LeafTypeK8s):
+		fallthrough
+	default:
+		{
+			config, err := utils.NewConfigFromBytes(cluster.Spec.Kubeconfig, func(config *rest.Config) {
+				config.QPS = utils.DefaultLeafKubeQPS
+				config.Burst = utils.DefaultLeafKubeBurst
+			})
+			if err != nil {
+				return reconcile.Result{}, fmt.Errorf("could not build kubeconfig for cluster %s: %v", cluster.Name, err)
 			}
-		}
-	}
 
-	// cluster deleted || cluster added || kubeconfig changed
-	c.clearClusterControllers(cluster)
-
-	if !cluster.DeletionTimestamp.IsZero() {
-		if err := c.deleteNode(ctx, cluster); err != nil {
-			return reconcile.Result{
-				Requeue: true,
-			}, err
-		}
-		if controllerutil.ContainsFinalizer(cluster, ControllerFinalizerName) {
-			controllerutil.RemoveFinalizer(cluster, ControllerFinalizerName)
-			if err := c.Root.Update(ctx, cluster); err != nil {
-				return controllerruntime.Result{}, err
+			leafClient, err := kubernetes.NewForConfig(config)
+			if err != nil {
+				return reconcile.Result{}, fmt.Errorf("could not build clientset for cluster %s: %v", cluster.Name, err)
 			}
+
+			leafDynamic, err := dynamic.NewForConfig(config)
+			if err != nil {
+				return reconcile.Result{}, fmt.Errorf("could not build dynamic client for cluster %s: %v", cluster.Name, err)
+			}
+
+			leafKosmosClient, err := kosmosversioned.NewForConfig(config)
+			if err != nil {
+				return reconcile.Result{}, fmt.Errorf("could not build kosmos clientset for cluster %s: %v", cluster.Name, err)
+			}
+
+			// ensure finalizer
+			if cluster.DeletionTimestamp.IsZero() {
+				if !controllerutil.ContainsFinalizer(cluster, ControllerFinalizerName) {
+					controllerutil.AddFinalizer(cluster, ControllerFinalizerName)
+					if err := c.Root.Update(ctx, cluster); err != nil {
+						return controllerruntime.Result{}, err
+					}
+				}
+			}
+
+			// cluster deleted || cluster added || kubeconfig changed
+			c.clearClusterControllers(cluster)
+
+			if !cluster.DeletionTimestamp.IsZero() {
+				if err := c.deleteNode(ctx, cluster); err != nil {
+					return reconcile.Result{
+						Requeue: true,
+					}, err
+				}
+				if controllerutil.ContainsFinalizer(cluster, ControllerFinalizerName) {
+					controllerutil.RemoveFinalizer(cluster, ControllerFinalizerName)
+					if err := c.Root.Update(ctx, cluster); err != nil {
+						return controllerruntime.Result{}, err
+					}
+				}
+				return reconcile.Result{}, nil
+			}
+
+			// build mgr for cluster
+			// TODO bug, the v4 log is lost
+			mgr, err := controllerruntime.NewManager(config, controllerruntime.Options{
+				Logger:                 c.Logger.WithName("leaf-controller-manager"),
+				Scheme:                 scheme.NewSchema(),
+				LeaderElection:         false,
+				MetricsBindAddress:     "0",
+				HealthProbeBindAddress: "0",
+			})
+			if err != nil {
+				return reconcile.Result{}, fmt.Errorf("new manager with err %v, cluster %s", err, cluster.Name)
+			}
+
+			leafModelHandler := leafUtils.NewLeafModelHandler(cluster, c.RootClientset, leafClient)
+			c.LeafModelHandler = leafModelHandler
+
+			nodes, leafNodeSelectors, err := c.createNode(ctx, cluster, leafClient)
+			if err != nil {
+				return reconcile.Result{RequeueAfter: RequeueTime}, fmt.Errorf("create node with err %v, cluster %s", err, cluster.Name)
+			}
+			// TODO @wyz
+			for _, node := range nodes {
+				node.ResourceVersion = ""
+			}
+
+			subContext, cancel := context.WithCancel(ctx)
+
+			c.ControllerManagersLock.Lock()
+			c.ControllerManagers[cluster.Name] = mgr
+			c.ManagerCancelFuncs[cluster.Name] = &cancel
+			c.ControllerManagersLock.Unlock()
+
+			if err = c.setupControllers(mgr, cluster, nodes, leafDynamic, leafNodeSelectors, leafClient, leafKosmosClient, config, subContext); err != nil {
+				return reconcile.Result{}, fmt.Errorf("failed to setup cluster %s controllers: %v", cluster.Name, err)
+			}
+
+			go func() {
+				if err := mgr.Start(subContext); err != nil {
+					klog.Errorf("failed to start cluster %s controller manager: %v", cluster.Name, err)
+				}
+			}()
+
+			klog.V(4).Infof("============ %s has been reconciled =============", request.Name)
+
+			return reconcile.Result{}, nil
 		}
-		return reconcile.Result{}, nil
+
 	}
-
-	// build mgr for cluster
-	// TODO bug, the v4 log is lost
-	mgr, err := controllerruntime.NewManager(config, controllerruntime.Options{
-		Logger:                 c.Logger.WithName("leaf-controller-manager"),
-		Scheme:                 scheme.NewSchema(),
-		LeaderElection:         false,
-		MetricsBindAddress:     "0",
-		HealthProbeBindAddress: "0",
-	})
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("new manager with err %v, cluster %s", err, cluster.Name)
-	}
-
-	leafModelHandler := leafUtils.NewLeafModelHandler(cluster, c.RootClientset, leafClient)
-	c.LeafModelHandler = leafModelHandler
-
-	nodes, leafNodeSelectors, err := c.createNode(ctx, cluster, leafClient)
-	if err != nil {
-		return reconcile.Result{RequeueAfter: RequeueTime}, fmt.Errorf("create node with err %v, cluster %s", err, cluster.Name)
-	}
-	// TODO @wyz
-	for _, node := range nodes {
-		node.ResourceVersion = ""
-	}
-
-	subContext, cancel := context.WithCancel(ctx)
-
-	c.ControllerManagersLock.Lock()
-	c.ControllerManagers[cluster.Name] = mgr
-	c.ManagerCancelFuncs[cluster.Name] = &cancel
-	c.ControllerManagersLock.Unlock()
-
-	if err = c.setupControllers(mgr, cluster, nodes, leafDynamic, leafNodeSelectors, leafClient, leafKosmosClient, config, subContext); err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to setup cluster %s controllers: %v", cluster.Name, err)
-	}
-
-	go func() {
-		if err := mgr.Start(subContext); err != nil {
-			klog.Errorf("failed to start cluster %s controller manager: %v", cluster.Name, err)
-		}
-	}()
-
-	klog.V(4).Infof("============ %s has been reconciled =============", request.Name)
-
-	return reconcile.Result{}, nil
 }
 
 func (c *ClusterController) clearClusterControllers(cluster *kosmosv1alpha1.Cluster) {

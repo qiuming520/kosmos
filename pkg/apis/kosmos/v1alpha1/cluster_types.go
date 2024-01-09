@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // +genclient
@@ -109,12 +110,9 @@ type ClusterTreeOptions struct {
 	// +optional
 	LeafType string `json:"leafType,omitempty"`
 
-	// secret?
+	// LeafConfig is an optional set of arguments for node provider.
 	// +optional
-	AccessKey string `json:"accessKey,omitempty"`
-
-	// +optional
-	SecretKey string `json:"secretKey,omitempty"`
+	LeafConfig LeafConfig `json:"leafConfig,omitempty"`
 }
 
 type LeafModel struct {
@@ -176,6 +174,16 @@ type VxlanCIDRs struct {
 type NICNodeNames struct {
 	InterfaceName string   `json:"interfaceName"`
 	NodeName      []string `json:"nodeName"`
+}
+
+type LeafConfig struct {
+	// Name defines the name of node provider being configured
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Args defines the arguments passed to the plugins at the time of initialization. Args can have arbitrary structure.
+	// +optional
+	Args runtime.Object `json:"args,omitempty" yaml:"args,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

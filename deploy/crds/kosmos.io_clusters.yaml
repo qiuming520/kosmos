@@ -113,12 +113,22 @@ spec:
                 type: object
               clusterTreeOptions:
                 properties:
-                  accessKey:
-                    description: secret?
-                    type: string
                   enable:
                     default: true
                     type: boolean
+                  leafConfig:
+                    description: LeafConfig is an optional set of arguments for node
+                      provider.
+                    properties:
+                      args:
+                        description: Args defines the arguments passed to the plugins
+                          at the time of initialization. Args can have arbitrary structure.
+                        x-kubernetes-preserve-unknown-fields: true
+                      name:
+                        description: Name defines the name of node provider being
+                          configured
+                        type: string
+                    type: object
                   leafModels:
                     description: LeafModels provide an api to arrange the member cluster
                       with some rules to pretend one or more leaf node
@@ -230,8 +240,6 @@ spec:
                     type: array
                   leafType:
                     default: k8s
-                    type: string
-                  secretKey:
                     type: string
                 type: object
               imageRepository:
